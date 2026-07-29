@@ -6,8 +6,6 @@ for cxx in MMS.all_targets:
   binary = MMS.Program(cxx, name)
   if binary.compiler.target.platform == 'windows':
     continue
-  if binary.compiler.target.arch == 'x86_64' and binary.compiler.target.platform == 'linux':
-    continue
 
   binary.compiler.defines += [
     'SOURCEHOOK_TESTS',
@@ -50,6 +48,8 @@ for cxx in MMS.all_targets:
   if cxx.target.arch == 'x86':
     binary.sources += ['../sourcehook_hookmangen_x86.cpp']
   elif binary.compiler.target.arch == 'x86_64':
-    binary.sources += ['../sourcehook_hookmangen_x86_64.cpp']
+    binary.compiler.defines += ['PLATFORM_64BITS']
+    if binary.compiler.target.platform != 'linux':
+      binary.sources += ['../sourcehook_hookmangen_x86_64.cpp']
 
   builder.Add(binary)

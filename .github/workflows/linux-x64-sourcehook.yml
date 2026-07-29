@@ -87,7 +87,7 @@ jobs:
           test -x core/sourcehook/test/test_sourcehook/linux-x86/test_sourcehook
           core/sourcehook/test/test_sourcehook/linux-x86/test_sourcehook -v
 
-      - name: Verify SourceHook x64 is disabled
+      - name: Test SourceHook optimized x64
         working-directory: metamod-source
         shell: bash
         run: |
@@ -99,7 +99,8 @@ jobs:
             --sdks= \
             --targets=x86_64
           ambuild
-          test ! -e core/sourcehook/test/test_sourcehook/linux-x86_64/test_sourcehook
+          test -x core/sourcehook/test/test_sourcehook/linux-x86_64/test_sourcehook
+          core/sourcehook/test/test_sourcehook/linux-x86_64/test_sourcehook -v
 
       - name: Test SourceHook debug x86
         working-directory: metamod-source
@@ -115,6 +116,21 @@ jobs:
           ambuild
           test -x core/sourcehook/test/test_sourcehook/linux-x86/test_sourcehook
           core/sourcehook/test/test_sourcehook/linux-x86/test_sourcehook -v
+
+      - name: Test SourceHook debug x64
+        working-directory: metamod-source
+        shell: bash
+        run: |
+          mkdir build-sh-debug-x64
+          cd build-sh-debug-x64
+          python3 ../configure.py \
+            --enable-debug \
+            --enable-tests \
+            --sdks= \
+            --targets=x86_64
+          ambuild
+          test -x core/sourcehook/test/test_sourcehook/linux-x86_64/test_sourcehook
+          core/sourcehook/test/test_sourcehook/linux-x86_64/test_sourcehook -v
 
       - name: Upload baseline
         uses: actions/upload-artifact@v7

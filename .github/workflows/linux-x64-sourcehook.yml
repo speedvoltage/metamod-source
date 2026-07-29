@@ -72,6 +72,21 @@ jobs:
           file addons/metamod/bin/metamod.2.hl2dm.so | grep -q 'ELF 32-bit'
           file addons/metamod/bin/linux64/metamod.2.hl2dm.so | grep -q 'ELF 64-bit'
 
+      - name: Build experimental x64
+        working-directory: metamod-source
+        shell: bash
+        run: |
+          mkdir build-experimental-x64
+          cd build-experimental-x64
+          python3 ../configure.py \
+            --enable-optimize \
+            --enable-sourcehook-x64-sysv \
+            --sdks='${{ env.SDKS }}' \
+            --targets=x86_64 \
+            '--hl2sdk-root=${{ steps.paths.outputs.dependencies }}'
+          ambuild
+          file package/addons/metamod/bin/linux64/metamod.2.hl2dm.so | grep -q 'ELF 64-bit'
+
       - name: Test SourceHook optimized x86
         working-directory: metamod-source
         shell: bash
@@ -138,4 +153,5 @@ jobs:
           name: metamod-source-linux-baseline
           path: |
             metamod-source/build/package
+            metamod-source/build-experimental-x64/package
             metamod-source/dependency-revisions.txt

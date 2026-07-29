@@ -30,6 +30,9 @@ parser.options.add_argument('-s', '--sdks', default='present', dest='sdks',
                             'comma-delimited list of engine names')
 parser.options.add_argument('--enable-tests', default=False, dest='enable_tests', action='store_true',
                        help='Build tests.')
+parser.options.add_argument('--enable-sourcehook-x64-sysv', default=False,
+                       dest='enable_sourcehook_x64_sysv', action='store_true',
+                       help='Enable the experimental SourceHook Linux x64 generator.')
 parser.options.add_argument('--breakpad-dump', action='store_true', dest='breakpad_dump',
                        default=False, help='Dump and upload breakpad symbols')
 parser.options.add_argument('--targets', type=str, dest='targets', default=None,

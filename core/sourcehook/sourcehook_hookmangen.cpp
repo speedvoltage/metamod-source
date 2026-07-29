@@ -20,7 +20,7 @@
 
 #include "sourcehook_impl.h"
 #include "sourcehook_hookmangen.h"
-#if defined( PLATFORM_64BITS ) && !defined( _LINUX )
+#if defined( PLATFORM_64BITS ) && (!defined( _LINUX ) || defined( SOURCEHOOK_TESTS ))
 #include "sourcehook_hookmangen_x86_64.h"
 typedef SourceHook::Impl::x64GenContext SHGenContext;
 #else
@@ -60,7 +60,7 @@ namespace SourceHook
 
 		HookManagerPubFunc CHookManagerAutoGen::MakeHookMan(const ProtoInfo *proto, int vtbl_offs, int vtbl_idx)
 		{
-#if defined( PLATFORM_64BITS ) && defined( _LINUX )
+#if defined( PLATFORM_64BITS ) && defined( _LINUX ) && !defined( SOURCEHOOK_TESTS )
 			return nullptr;
 #else
 			CProto mproto(proto);

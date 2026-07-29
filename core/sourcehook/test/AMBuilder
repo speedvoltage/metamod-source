@@ -54,6 +54,8 @@ for cxx in MMS.all_targets:
       binary.sources += ['../sourcehook_hookmangen_x86_64.cpp']
     else:
       binary.sources += [
+        '../sourcehook_hookmangen_x86_64.cpp',
+        'testhookmangenx64.cpp',
         'testsysvabi.cpp',
         'testx64jit.cpp',
       ]

@@ -58,6 +58,8 @@ namespace SourceHook
 		{
 			m_HookFunc.clear();
 			m_PubFunc.clear();
+			m_HookFunc_FrameOffset = 0;
+			m_HookFunc_FrameVarsSize = 0;
 			if (m_BuiltPI_Params)
 			{
 				delete [] m_BuiltPI_Params;
@@ -159,6 +161,21 @@ namespace SourceHook
 			{
 				return nullptr;
 			}
+
+#if SH_COMP == SH_COMP_GCC
+			if (m_Proto.GetConvention() != ProtoInfo::CallConv_ThisCall ||
+				m_Proto.GetNumOfParams() != 0 ||
+				m_Proto.GetRet().size != 0 ||
+				m_Proto.GetRet().type != PassInfo::PassType_Unknown ||
+				(m_Proto.GetRet().flags & ~static_cast<unsigned int>(PassInfo::PassFlag_ByVal)) != 0 ||
+				m_Proto.GetRet().pNormalCtor != nullptr ||
+				m_Proto.GetRet().pCopyCtor != nullptr ||
+				m_Proto.GetRet().pDtor != nullptr ||
+				m_Proto.GetRet().pAssignOperator != nullptr)
+			{
+				return nullptr;
+			}
+#endif
 
 			// Detect the pass flags (if they're missing) for return and parameters type
 			AutoDetectRetType();
@@ -286,6 +303,9 @@ namespace SourceHook
 			}
 
 			std::int32_t stack_frame_size = ComputeVarsSize();
+#if SH_COMP == SH_COMP_GCC
+			stack_frame_size = AlignSize(stack_frame_size + SIZE_PTR, 16) - SIZE_PTR;
+#endif
 			m_HookFunc.sub(rsp, stack_frame_size);
 
 			// Store rbp where it should be
@@ -324,7 +344,7 @@ namespace SourceHook
 				}
 			}
 #else
-static_assert(false, "Missing registers saving for linux");
+			m_HookFunc.mov(rbp(v_this), rdi);
 #endif
 
 			// From this point on, no matter what. RSP should be aligned on 16 bytes boundary
@@ -416,8 +436,6 @@ static_assert(false, "Missing registers saving for linux");
 				// Free shadow space
 				MSVC_ONLY(m_HookFunc.add(rsp, 40));
 			}
-#else
-static_assert(false, "Missing parameters destruction for linux");
 #endif
 
 			DoReturn(v_ret_ptr, v_memret_ptr);
@@ -482,6 +500,7 @@ static_assert(false, "Missing parameters destruction for linux");
 
 			// Allocate the necessary stack space
 			MSVC_ONLY(m_HookFunc.sub(rsp, 88)); // shadow space (32 bytes) + 6 stack arguments (48 bytes) + 8 bytes
+			GCC_ONLY(m_HookFunc.sub(rsp, 32));
 
 			// 1st parameter (this)
 			GCC_ONLY(m_HookFunc.mov(rdi, reinterpret_cast<std::uintptr_t>(m_SHPtr)));
@@ -511,9 +530,13 @@ static_assert(false, "Missing parameters destruction for linux");
 			MSVC_ONLY(m_HookFunc.lea(rax, rbp(v_status)));
 			MSVC_ONLY(m_HookFunc.mov(rsp(0x28), rax));
 			// 7th argument - META_RES* prevResPtr
+			GCC_ONLY(m_HookFunc.lea(rax, rbp(v_prev_res)));
+			GCC_ONLY(m_HookFunc.mov(rsp(0x00), rax));
 			MSVC_ONLY(m_HookFunc.lea(rax, rbp(v_prev_res)));
 			MSVC_ONLY(m_HookFunc.mov(rsp(0x30), rax));
 			// 8th argument - META_RES* curResPtr
+			GCC_ONLY(m_HookFunc.lea(rax, rbp(v_cur_res)));
+			GCC_ONLY(m_HookFunc.mov(rsp(0x08), rax));
 			MSVC_ONLY(m_HookFunc.lea(rax, rbp(v_cur_res)));
 			MSVC_ONLY(m_HookFunc.mov(rsp(0x38), rax));
 			if (m_Proto.GetRet().size == 0) // void return function
@@ -521,16 +544,22 @@ static_assert(false, "Missing parameters destruction for linux");
 				// nullptr
 				m_HookFunc.xor_reg(rax, rax);
 				// 9th argument - const void* origRetPtr
+				GCC_ONLY(m_HookFunc.mov(rsp(0x10), rax));
 				MSVC_ONLY(m_HookFunc.mov(rsp(0x40), rax));
 				// 10th argument - void* overrideRetPtr
+				GCC_ONLY(m_HookFunc.mov(rsp(0x18), rax));
 				MSVC_ONLY(m_HookFunc.mov(rsp(0x48), rax));
 			}
 			else
 			{
 				// 9th argument - const void* origRetPtr
+				GCC_ONLY(m_HookFunc.lea(rax, rbp(v_orig_ret)));
+				GCC_ONLY(m_HookFunc.mov(rsp(0x10), rax));
 				MSVC_ONLY(m_HookFunc.lea(rax, rbp(v_orig_ret)));
 				MSVC_ONLY(m_HookFunc.mov(rsp(0x40), rax));
 				// 10th argument - void* overrideRetPtr
+				GCC_ONLY(m_HookFunc.lea(rax, rbp(v_override_ret)));
+				GCC_ONLY(m_HookFunc.mov(rsp(0x18), rax));
 				MSVC_ONLY(m_HookFunc.lea(rax, rbp(v_override_ret)));
 				MSVC_ONLY(m_HookFunc.mov(rsp(0x48), rax));
 			}
@@ -544,6 +573,7 @@ static_assert(false, "Missing parameters destruction for linux");
 
 			// Restore the rsp value
 			MSVC_ONLY(m_HookFunc.add(rsp, 88));
+			GCC_ONLY(m_HookFunc.add(rsp, 32));
 		}
 
 		// Extension of MAKE_DELEG macro
@@ -634,10 +664,6 @@ static_assert(false, "Missing parameters destruction for linux");
 			// cur_res = MRES_IGNORED;
 			m_HookFunc.mov(rbp(v_cur_res), MRES_IGNORED);
 
-			// prev_res = cur_res;
-			m_HookFunc.mov(rax, rbp(v_cur_res));
-			m_HookFunc.mov(rbp(v_prev_res), rax);
-
 			// call
 			std::int32_t stackSpace = PushParameters(v_iter, MemRetWithTempObj() ? v_mem_ret : v_plugin_ret);
 			m_HookFunc.mov(rax, rbp(v_iter));
@@ -648,6 +674,10 @@ static_assert(false, "Missing parameters destruction for linux");
 			m_HookFunc.add(rsp, stackSpace);
 
 			SaveReturnValue(v_mem_ret, v_plugin_ret);
+
+			// prev_res = cur_res;
+			m_HookFunc.mov(rax, rbp(v_cur_res));
+			m_HookFunc.mov(rbp(v_prev_res), rax);
 
 			// if (cur_res > status)
 			m_HookFunc.mov(rax, rbp(v_cur_res));
@@ -860,10 +890,10 @@ static_assert(false, "Missing parameters destruction for linux");
 
 		std::int32_t x64GenContext::PushParameters(int v_this, int v_ret)
 		{
-			auto retInfo = m_Proto.GetRet();
 			std::int32_t stackSpace = 0;
 
 #if SH_COMP == SH_COMP_MSVC
+			auto retInfo = m_Proto.GetRet();
 			const x86_64_Reg params_reg[] = { rcx, rdx, r8, r9 };
 			const x86_64_FloatReg params_floatreg[] = { xmm0, xmm1, xmm2, xmm3 };
 
@@ -912,7 +942,11 @@ static_assert(false, "Missing parameters destruction for linux");
 
 			return stackSpace;
 #else
-static_assert(false, "Missing registers saving for linux");
+			SH_ASSERT(m_Proto.GetNumOfParams() == 0 && m_Proto.GetRet().size == 0,
+				("Unsupported SysV x64 signature reached PushParameters"));
+			(void)v_ret;
+			m_HookFunc.mov(rdi, rbp(v_this));
+			return stackSpace;
 #endif
 		}
 
@@ -994,7 +1028,10 @@ static_assert(false, "Missing registers saving for linux");
 				return;
 			}
 #else
-			static_assert(false, "Missing SaveReturnValue for linux");
+			(void)v_mem_ret;
+			(void)v_ret;
+			SH_ASSERT(0, ("Unsupported SysV x64 return reached SaveReturnValue"));
+			return;
 #endif
 		}
 
@@ -1205,8 +1242,6 @@ static_assert(false, "Missing registers saving for linux");
 						} else {
 							pi.flags |= PassInfo::PassFlag_RetReg;
 						}
-#elif SH_COMP == SH_COMP_GCC
-static_assert(false, "Missing auto-detect type for linux!");
 #endif
 					}
 				}

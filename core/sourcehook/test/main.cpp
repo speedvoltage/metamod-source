@@ -57,6 +57,7 @@ DECL_TEST(HookManGen);
 DECL_TEST(OddThunks);
 DECL_TEST(ProtoIdentity);
 #if defined(__linux__) && defined(__x86_64__)
+DECL_TEST(HookManGenX64);
 DECL_TEST(X64SysVAbiOracle);
 DECL_TEST(X64JitWriter);
 #endif
@@ -89,6 +90,7 @@ int main(int argc, char *argv[])
 	DO_TEST(OddThunks);
 	DO_TEST(ProtoIdentity);
 #if defined(__linux__) && defined(__x86_64__)
+	DO_TEST(HookManGenX64);
 	DO_TEST(X64SysVAbiOracle);
 	DO_TEST(X64JitWriter);
 #endif
@@ -138,7 +140,6 @@ void Test_UnpausePlugin(SourceHook::ISourceHook *shptr, SourceHook::Plugin plug)
 	static_cast<SourceHook::Impl::CSourceHookImpl *>(shptr)->UnpausePlugin(plug);
 }
 
-#if !defined( _M_AMD64 ) && !defined( __amd64__ ) && !defined(__x86_64__)
 SourceHook::IHookManagerAutoGen *Test_HMAG_Factory(SourceHook::ISourceHook *shptr)
 {
 	return new SourceHook::Impl::CHookManagerAutoGen(shptr);
@@ -148,4 +149,3 @@ void Test_HMAG_Delete(SourceHook::IHookManagerAutoGen *ptr)
 {
 	delete static_cast<SourceHook::Impl::CHookManagerAutoGen*>(ptr);
 }
-#endif

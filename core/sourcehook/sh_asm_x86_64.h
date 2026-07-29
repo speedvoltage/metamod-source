@@ -4,6 +4,8 @@
 #include "sh_pagealloc.h"
 #include "sh_asm.h"
 
+#define SH_X64_JIT_WRITER_REQUIRES_ALLOCATOR 1
+
 namespace SourceHook
 {
 	namespace Asm

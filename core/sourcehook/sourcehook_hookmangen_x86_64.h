@@ -15,6 +15,7 @@
 #include <climits>
 
 #include "sh_asm_x86_64.h"
+#include "sh_vector.h"
 
 namespace SourceHook
 {
@@ -42,7 +43,22 @@ namespace SourceHook
 			std::int32_t AlignSize(std::int32_t x, std::int32_t boundary);
 			std::int32_t GetParamStackSize(const IntPassInfo &info);
 
+			enum SysVParamClass
+			{
+				SysVParam_Gpr,
+				SysVParam_Sse,
+				SysVParam_Stack
+			};
+
+			struct SysVParamLocation
+			{
+				std::int32_t frameOffset;
+				std::int32_t index;
+				SysVParamClass location;
+			};
+
 			void Clear();
+			void BuildSysVParamLayout();
 			void AutoDetectRetType();
 			void AutoDetectParamFlags();
 			bool PassInfoSupported(const IntPassInfo& pi, bool is_ret);
@@ -83,6 +99,7 @@ namespace SourceHook
 
 			std::int32_t m_HookFunc_FrameOffset;
 			std::int32_t m_HookFunc_FrameVarsSize;
+			CVector<SysVParamLocation> m_SysVParams;
 		};
 	}
 }

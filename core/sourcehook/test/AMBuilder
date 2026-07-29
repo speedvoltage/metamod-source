@@ -53,6 +53,7 @@ for cxx in MMS.all_targets:
     if binary.compiler.target.platform != 'linux':
       binary.sources += ['../sourcehook_hookmangen_x86_64.cpp']
     else:
+      binary.compiler.defines += ['SOURCEHOOK_X64_SYSV_TESTS']
       binary.sources += [
         '../sourcehook_hookmangen_x86_64.cpp',
         'testhookmangenx64.cpp',

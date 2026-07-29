@@ -14,10 +14,14 @@ bool TestX64JitWriter(std::string &error)
 
 	writer.xor_reg(rax, rax);
 	writer.xor_reg(r9, r9);
+	writer.movss(xmm0, rbp(-4));
+	writer.movss(rbp(-4), xmm0);
 
 	const unsigned char expected[] = {
 		0x48, 0x31, 0xc0,
 		0x4d, 0x31, 0xc9,
+		0xf3, 0x0f, 0x10, 0x45, 0xfc,
+		0xf3, 0x0f, 0x11, 0x45, 0xfc,
 	};
 
 	CHECK_COND(writer.GetSize() == sizeof(expected), "Encoded size");

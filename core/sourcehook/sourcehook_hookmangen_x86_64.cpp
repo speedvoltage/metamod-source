@@ -60,6 +60,7 @@ namespace SourceHook
 			m_PubFunc.clear();
 			m_HookFunc_FrameOffset = 0;
 			m_HookFunc_FrameVarsSize = 0;
+			m_SysVParams.clear();
 			if (m_BuiltPI_Params)
 			{
 				delete [] m_BuiltPI_Params;
@@ -146,6 +147,47 @@ namespace SourceHook
 			return AlignSize(GetRealSize(info), 8);
 		}
 
+		void x64GenContext::BuildSysVParamLayout()
+		{
+			std::int32_t gpr_index = 1;
+			std::int32_t sse_index = 0;
+			std::int32_t stack_index = 0;
+
+			for (int i = 0; i < m_Proto.GetNumOfParams(); ++i)
+			{
+				const auto& info = m_Proto.GetParam(i);
+				SysVParamLocation location;
+				location.frameOffset = AddVarToFrame(SIZE_PTR);
+
+				if ((info.flags & PassInfo::PassFlag_ByRef) ||
+					info.type == PassInfo::PassType_Basic)
+				{
+					if (gpr_index < 6)
+					{
+						location.location = SysVParam_Gpr;
+						location.index = gpr_index++;
+					}
+					else
+					{
+						location.location = SysVParam_Stack;
+						location.index = stack_index++;
+					}
+				}
+				else if (sse_index < 8)
+				{
+					location.location = SysVParam_Sse;
+					location.index = sse_index++;
+				}
+				else
+				{
+					location.location = SysVParam_Stack;
+					location.index = stack_index++;
+				}
+
+				m_SysVParams.push_back(location);
+			}
+		}
+
 		HookManagerPubFunc x64GenContext::Generate()
 		{
 			Clear();
@@ -163,15 +205,16 @@ namespace SourceHook
 			}
 
 #if SH_COMP == SH_COMP_GCC
+			const auto& gcc_ret = m_Proto.GetRet();
 			if (m_Proto.GetConvention() != ProtoInfo::CallConv_ThisCall ||
-				m_Proto.GetNumOfParams() != 0 ||
-				m_Proto.GetRet().size != 0 ||
-				m_Proto.GetRet().type != PassInfo::PassType_Unknown ||
-				(m_Proto.GetRet().flags & ~static_cast<unsigned int>(PassInfo::PassFlag_ByVal)) != 0 ||
-				m_Proto.GetRet().pNormalCtor != nullptr ||
-				m_Proto.GetRet().pCopyCtor != nullptr ||
-				m_Proto.GetRet().pDtor != nullptr ||
-				m_Proto.GetRet().pAssignOperator != nullptr)
+				(gcc_ret.flags & PassInfo::PassFlag_RetMem) != 0 ||
+				(gcc_ret.size == 0 &&
+					(gcc_ret.type != PassInfo::PassType_Unknown ||
+					 (gcc_ret.flags & ~static_cast<unsigned int>(PassInfo::PassFlag_ByVal)) != 0 ||
+					 gcc_ret.pNormalCtor != nullptr ||
+					 gcc_ret.pCopyCtor != nullptr ||
+					 gcc_ret.pDtor != nullptr ||
+					 gcc_ret.pAssignOperator != nullptr)))
 			{
 				return nullptr;
 			}
@@ -211,6 +254,34 @@ namespace SourceHook
 
 		bool x64GenContext::PassInfoSupported(const IntPassInfo& pi, bool is_ret)
 		{
+#if SH_COMP == SH_COMP_GCC
+			const unsigned int byval = pi.flags & PassInfo::PassFlag_ByVal;
+			const unsigned int byref = pi.flags & PassInfo::PassFlag_ByRef;
+			unsigned int allowed_flags =
+				PassInfo::PassFlag_ByVal | PassInfo::PassFlag_ByRef;
+
+			if (is_ret)
+				allowed_flags |= PassInfo::PassFlag_RetReg;
+
+			if ((byval == 0) == (byref == 0) ||
+				(pi.flags & ~allowed_flags) != 0 ||
+				(is_ret && (pi.flags & PassInfo::PassFlag_RetReg) == 0) ||
+				pi.pNormalCtor != nullptr ||
+				pi.pCopyCtor != nullptr ||
+				pi.pDtor != nullptr ||
+				pi.pAssignOperator != nullptr)
+			{
+				return false;
+			}
+
+			if (pi.type == PassInfo::PassType_Basic)
+				return pi.size == 1 || pi.size == 2 || pi.size == 4 || pi.size == 8;
+
+			if (pi.type == PassInfo::PassType_Float)
+				return pi.size == 4 || pi.size == 8;
+
+			return false;
+#else
 			if (pi.type != PassInfo::PassType_Basic &&
 				pi.type != PassInfo::PassType_Float &&
 				pi.type != PassInfo::PassType_Object) {
@@ -240,6 +311,7 @@ namespace SourceHook
 				return false;			 // Neither byval nor byref!
 			}
 			return true;
+#endif
 		}
 
 		void* x64GenContext::GenerateHookFunc()
@@ -302,6 +374,10 @@ namespace SourceHook
 				v_mem_ret =      AddVarToFrame(AlignSize(GetParamStackSize(retInfo), 16));
 			}
 
+#if SH_COMP == SH_COMP_GCC
+			BuildSysVParamLayout();
+#endif
+
 			std::int32_t stack_frame_size = ComputeVarsSize();
 #if SH_COMP == SH_COMP_GCC
 			stack_frame_size = AlignSize(stack_frame_size + SIZE_PTR, 16) - SIZE_PTR;
@@ -344,7 +420,34 @@ namespace SourceHook
 				}
 			}
 #else
+			const x86_64_Reg params_reg[] = { rdi, rsi, rdx, rcx, r8, r9 };
+			const x86_64_FloatReg params_floatreg[] = {
+				xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+			};
+
 			m_HookFunc.mov(rbp(v_this), rdi);
+
+			for (int i = 0; i < m_Proto.GetNumOfParams(); ++i)
+			{
+				const auto& location = m_SysVParams[i];
+
+				if (location.location == SysVParam_Gpr)
+				{
+					m_HookFunc.mov(rbp(location.frameOffset), params_reg[location.index]);
+				}
+				else if (location.location == SysVParam_Sse)
+				{
+					if (m_Proto.GetParam(i).size == 4)
+						m_HookFunc.movss(rbp(location.frameOffset), params_floatreg[location.index]);
+					else
+						m_HookFunc.movsd(rbp(location.frameOffset), params_floatreg[location.index]);
+				}
+				else
+				{
+					m_HookFunc.mov(rax, rbp(8 + location.index * SIZE_PTR));
+					m_HookFunc.mov(rbp(location.frameOffset), rax);
+				}
+			}
 #endif
 
 			// From this point on, no matter what. RSP should be aligned on 16 bytes boundary
@@ -675,7 +778,6 @@ namespace SourceHook
 
 			SaveReturnValue(v_mem_ret, v_plugin_ret);
 
-			// prev_res = cur_res;
 			m_HookFunc.mov(rax, rbp(v_cur_res));
 			m_HookFunc.mov(rbp(v_prev_res), rax);
 
@@ -942,10 +1044,47 @@ namespace SourceHook
 
 			return stackSpace;
 #else
-			SH_ASSERT(m_Proto.GetNumOfParams() == 0 && m_Proto.GetRet().size == 0,
-				("Unsupported SysV x64 signature reached PushParameters"));
 			(void)v_ret;
+			const x86_64_Reg params_reg[] = { rdi, rsi, rdx, rcx, r8, r9 };
+			const x86_64_FloatReg params_floatreg[] = {
+				xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+			};
+			std::int32_t stack_params = 0;
+
+			for (int i = 0; i < m_Proto.GetNumOfParams(); ++i)
+			{
+				if (m_SysVParams[i].location == SysVParam_Stack)
+					++stack_params;
+			}
+
+			stackSpace = AlignSize(stack_params * SIZE_PTR, 16);
+			if (stackSpace != 0)
+				m_HookFunc.sub(rsp, stackSpace);
+
 			m_HookFunc.mov(rdi, rbp(v_this));
+
+			for (int i = 0; i < m_Proto.GetNumOfParams(); ++i)
+			{
+				const auto& location = m_SysVParams[i];
+
+				if (location.location == SysVParam_Gpr)
+				{
+					m_HookFunc.mov(params_reg[location.index], rbp(location.frameOffset));
+				}
+				else if (location.location == SysVParam_Sse)
+				{
+					if (m_Proto.GetParam(i).size == 4)
+						m_HookFunc.movss(params_floatreg[location.index], rbp(location.frameOffset));
+					else
+						m_HookFunc.movsd(params_floatreg[location.index], rbp(location.frameOffset));
+				}
+				else
+				{
+					m_HookFunc.mov(rax, rbp(location.frameOffset));
+					m_HookFunc.mov(rsp(location.index * SIZE_PTR), rax);
+				}
+			}
+
 			return stackSpace;
 #endif
 		}
@@ -1029,9 +1168,22 @@ namespace SourceHook
 			}
 #else
 			(void)v_mem_ret;
-			(void)v_ret;
-			SH_ASSERT(0, ("Unsupported SysV x64 return reached SaveReturnValue"));
-			return;
+			if ((retInfo.flags & PassInfo::PassFlag_ByRef) ||
+				retInfo.type == PassInfo::PassType_Basic)
+			{
+				m_HookFunc.mov(rbp(v_ret), rax);
+			}
+			else if (retInfo.type == PassInfo::PassType_Float)
+			{
+				if (retInfo.size == 4)
+					m_HookFunc.movss(rbp(v_ret), xmm0);
+				else
+					m_HookFunc.movsd(rbp(v_ret), xmm0);
+			}
+			else
+			{
+				SH_ASSERT(0, ("Unsupported SysV x64 return reached SaveReturnValue"));
+			}
 #endif
 		}
 
@@ -1108,7 +1260,14 @@ namespace SourceHook
 			// else: byval
 
 			if (retInfo.type == PassInfo::PassType_Float) {
+#if SH_COMP == SH_COMP_GCC
+				if (retInfo.size == 4)
+					m_HookFunc.movss(xmm0, r8());
+				else
+					m_HookFunc.movsd(xmm0, r8());
+#else
 				m_HookFunc.movsd(xmm0, r8());
+#endif
 			}
 			else if (retInfo.type == PassInfo::PassType_Basic || 
 				((retInfo.type == PassInfo::PassType_Object) && (retInfo.flags & PassInfo::PassFlag_RetReg)) ) {

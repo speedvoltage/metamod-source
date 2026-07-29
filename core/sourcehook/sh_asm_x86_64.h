@@ -195,6 +195,10 @@ namespace SourceHook
 			return REX::W | ((static_cast<std::int8_t>((reg & 0x8) == 0x8) << 2) | static_cast<std::int8_t>((rm & 0x8) == 0x8));
 		}
 
+		constexpr inline std::uint8_t rex(x8664FloatReg reg, x8664Reg rm) {
+			return REX::BASE | ((static_cast<std::int8_t>((reg & 0x8) == 0x8) << 2) | static_cast<std::int8_t>((rm & 0x8) == 0x8));
+		}
+
 		constexpr inline std::uint8_t modrm(x8664Reg reg, x8664Reg rm) {
 			return (MOD_MODRM::REG << 6) | ((reg & 0x7) << 3) | (rm & 0x7);
 		}
@@ -411,6 +415,26 @@ namespace SourceHook
 				}
 				this->write_ubyte(0xB8 + dst.low());
 				this->write_uint64(imm);
+			}
+
+			void movss(x86_64_FloatReg reg, x86_64_RegRm rm) {
+				this->write_ubyte(0xF3);
+				if (reg.extended() || rm.extended()) {
+					this->write_ubyte(rex(reg, rm));
+				}
+				this->write_ubyte(0x0F);
+				this->write_ubyte(0x10);
+				rm.write_modrm(this, reg);
+			}
+
+			void movss(x86_64_RegRm rm, x86_64_FloatReg reg) {
+				this->write_ubyte(0xF3);
+				if (reg.extended() || rm.extended()) {
+					this->write_ubyte(rex(reg, rm));
+				}
+				this->write_ubyte(0x0F);
+				this->write_ubyte(0x11);
+				rm.write_modrm(this, reg);
 			}
 
 			void movsd(x86_64_FloatReg reg, x86_64_RegRm rm) {

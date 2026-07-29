@@ -1,0 +1,125 @@
+name: Linux x64 SourceHook
+
+on:
+  push:
+    branches:
+      - linux-x64-sourcehook
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    container:
+      image: ghcr.io/alliedmodders/build-containers/debian11-clang22@sha256:52c35568d47abd5974855247a5373b3ee22aaa5db508b873f3fc4d247c9f8f5a
+    env:
+      SDKS: hl2dm
+      TARGETS: x86,x86_64
+      HL2SDK_HL2DM_REF: af883d5052349f09fbe641c99149b84769a62d01
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+          path: metamod-source
+
+      - name: Resolve paths
+        id: paths
+        shell: bash
+        run: echo "dependencies=$GITHUB_WORKSPACE/dependencies" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          mkdir -p '${{ steps.paths.outputs.dependencies }}/metamod-source'
+          cd '${{ steps.paths.outputs.dependencies }}'
+          ../metamod-source/support/checkout-deps.sh -s '${{ env.SDKS }}'
+          git -C hl2sdk-hl2dm checkout --detach '${{ env.HL2SDK_HL2DM_REF }}'
+
+      - name: Record dependencies
+        shell: bash
+        run: |
+          {
+            git -C metamod-source rev-parse HEAD
+            git -C metamod-source/third_party/amtl rev-parse HEAD
+            git -C metamod-source/hl2sdk-manifests rev-parse HEAD
+            git -C '${{ steps.paths.outputs.dependencies }}/hl2sdk-hl2dm' rev-parse HEAD
+          } | tee metamod-source/dependency-revisions.txt
+
+      - name: Build optimized
+        working-directory: metamod-source
+        shell: bash
+        run: |
+          mkdir build
+          cd build
+          python3 ../configure.py \
+            --enable-optimize \
+            --sdks='${{ env.SDKS }}' \
+            --targets='${{ env.TARGETS }}' \
+            '--hl2sdk-root=${{ steps.paths.outputs.dependencies }}'
+          ambuild
+
+      - name: Verify architecture baseline
+        working-directory: metamod-source/build/package
+        shell: bash
+        run: |
+          file addons/metamod/bin/metamod.2.hl2dm.so | grep -q 'ELF 32-bit'
+          file addons/metamod/bin/linux64/metamod.2.hl2dm.so | grep -q 'ELF 64-bit'
+
+      - name: Test SourceHook optimized x86
+        working-directory: metamod-source
+        shell: bash
+        run: |
+          mkdir build-sh-opt-x86
+          cd build-sh-opt-x86
+          python3 ../configure.py \
+            --enable-optimize \
+            --enable-tests \
+            --sdks= \
+            --targets=x86
+          ambuild
+          test -x core/sourcehook/test/test_sourcehook/linux-x86/test_sourcehook
+          core/sourcehook/test/test_sourcehook/linux-x86/test_sourcehook -v
+
+      - name: Verify SourceHook x64 is disabled
+        working-directory: metamod-source
+        shell: bash
+        run: |
+          mkdir build-sh-opt-x64
+          cd build-sh-opt-x64
+          python3 ../configure.py \
+            --enable-optimize \
+            --enable-tests \
+            --sdks= \
+            --targets=x86_64
+          ambuild
+          test ! -e core/sourcehook/test/test_sourcehook/linux-x86_64/test_sourcehook
+
+      - name: Test SourceHook debug x86
+        working-directory: metamod-source
+        shell: bash
+        run: |
+          mkdir build-sh-debug-x86
+          cd build-sh-debug-x86
+          python3 ../configure.py \
+            --enable-debug \
+            --enable-tests \
+            --sdks= \
+            --targets=x86
+          ambuild
+          test -x core/sourcehook/test/test_sourcehook/linux-x86/test_sourcehook
+          core/sourcehook/test/test_sourcehook/linux-x86/test_sourcehook -v
+
+      - name: Upload baseline
+        uses: actions/upload-artifact@v7
+        with:
+          name: metamod-source-linux-baseline
+          path: |
+            metamod-source/build/package
+            metamod-source/dependency-revisions.txt

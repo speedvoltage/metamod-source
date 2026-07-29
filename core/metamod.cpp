@@ -85,7 +85,7 @@ static MetamodSourceConVar *mm_basedir = NULL;
 static CreateInterfaceFn engine_factory = NULL;
 static CreateInterfaceFn physics_factory = NULL;
 static CreateInterfaceFn filesystem_factory = NULL;
-#if !defined( __amd64__ )
+#if !defined( __amd64__ ) || defined( SOURCEHOOK_X64_SYSV )
 static CHookManagerAutoGen g_SH_HookManagerAutoGen(&g_SourceHook);
 #endif
 static META_RES last_meta_res;
@@ -847,7 +847,7 @@ void *MetamodSource::MetaFactory(const char *iface, int *ret, PluginId *id)
 		}
 		return static_cast<void *>(static_cast<ISmmPluginManager *>(&g_PluginMngr));
 	}
-#if !defined( __amd64__ )
+#if !defined( __amd64__ ) || defined( SOURCEHOOK_X64_SYSV )
 	else if (strcmp(iface, MMIFACE_SH_HOOKMANAUTOGEN) == 0)
 	{
 		if (ret)
@@ -1338,4 +1338,3 @@ mm_IsVspLoadComplete()
 {
 	return were_plugins_loaded;
 }
-

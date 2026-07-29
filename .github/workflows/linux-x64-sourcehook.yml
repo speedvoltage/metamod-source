@@ -86,6 +86,8 @@ jobs:
             '--hl2sdk-root=${{ steps.paths.outputs.dependencies }}'
           ambuild
           file package/addons/metamod/bin/linux64/metamod.2.hl2dm.so | grep -q 'ELF 64-bit'
+          strings package/addons/metamod/bin/linux64/metamod.2.hl2dm.so |
+            grep -Fxq 'IHookManagerAutoGen'
 
       - name: Test SourceHook optimized x86
         working-directory: metamod-source

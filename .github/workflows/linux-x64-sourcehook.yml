@@ -87,7 +87,7 @@ jobs:
           ambuild
           file package/addons/metamod/bin/linux64/metamod.2.hl2dm.so | grep -q 'ELF 64-bit'
           strings package/addons/metamod/bin/linux64/metamod.2.hl2dm.so |
-            grep -Fxq 'IHookManagerAutoGen'
+            grep -Fx 'IHookManagerAutoGen' >/dev/null
 
       - name: Test SourceHook optimized x86
         working-directory: metamod-source

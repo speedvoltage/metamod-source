@@ -38,6 +38,7 @@ namespace SourceHook
 					&& type == other.type
 					&& flags == other.flags
 					&& pNormalCtor == other.pNormalCtor
+					&& pCopyCtor == other.pCopyCtor
 					&& pDtor == other.pDtor
 					&& pAssignOperator == other.pAssignOperator;
 			}

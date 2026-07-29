@@ -39,6 +39,7 @@ for cxx in MMS.all_targets:
     'testmanual.cpp',
     'testmulti.cpp',
     'testoddthunks.cpp',
+    'testproto.cpp',
     'testrecall.cpp',
     'testreentr.cpp',
     'testref.cpp',

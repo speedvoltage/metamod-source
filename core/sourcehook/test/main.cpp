@@ -55,6 +55,7 @@ DECL_TEST(VPHooks);
 DECL_TEST(CPageAlloc);					// in testhookmangen.cpp
 DECL_TEST(HookManGen);
 DECL_TEST(OddThunks);
+DECL_TEST(ProtoIdentity);
 #if defined(__linux__) && defined(__x86_64__)
 DECL_TEST(X64SysVAbiOracle);
 DECL_TEST(X64JitWriter);
@@ -86,6 +87,7 @@ int main(int argc, char *argv[])
 	DO_TEST(HookManGen);
 #endif
 	DO_TEST(OddThunks);
+	DO_TEST(ProtoIdentity);
 #if defined(__linux__) && defined(__x86_64__)
 	DO_TEST(X64SysVAbiOracle);
 	DO_TEST(X64JitWriter);

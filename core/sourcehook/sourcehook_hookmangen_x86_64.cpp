@@ -15,23 +15,10 @@
 // https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention
 // https://refspecs.linuxbase.orgz/elf/x86_64-abi-0.99.pdf
 
-#include <cstdio>
-#include <string>
-
 #include "sourcehook_impl.h"
 #include "sourcehook_hookmangen.h"
 #include "sourcehook_hookmangen_x86_64.h"
 #include "sourcehook_pibuilder.h"
-
-#include "metamod_oslink.h"
-#include "metamod.h"
-#include "interface.h"
-#include "eiface.h"
-#include "metamod_version.h"
-#include "metamod_provider.h"
-
-extern SourceHook::ISourceHook *g_SHPtr;
-extern SourceMM::IMetamodSourceProvider *provider;
 
 #if SH_COMP == SH_COMP_MSVC
 # define GCC_ONLY(x)
@@ -47,60 +34,6 @@ namespace SourceHook
 {
 	namespace Impl
 	{
-		void PrintDebug(x64JitWriter& jit, const char* message) {
-			static MemFuncInfo mfi = {false, -1, -1, -1};
-			if (mfi.vtblindex == -1)
-			{
-				GetFuncInfo(&SourceMM::IMetamodSourceProvider::ConsolePrint, mfi);
-				if (!mfi.isVirtual || mfi.thisptroffs != 0 || mfi.vtbloffs != 0 || mfi.vtblindex < 0)
-				{
-					mfi.vtblindex = -1;
-					SH_ASSERT(0, ("Couldn't retrieve details of SourceMM::IMetamodSourceProvider::ConsolePrint!"));
-					return;
-				}
-			}
-
-			static MemFuncInfo mfi2 = {false, -1, -1, -1};
-			if (mfi2.vtblindex == -1)
-			{
-				GetFuncInfo(&SourceMM::IMetamodSourceProvider::LogMessage, mfi2);
-				if (!mfi2.isVirtual || mfi2.thisptroffs != 0 || mfi2.vtbloffs != 0 || mfi2.vtblindex < 0)
-				{
-					mfi2.vtblindex = -1;
-					SH_ASSERT(0, ("Couldn't retrieve details of SourceMM::IMetamodSourceProvider::ConsolePrint!"));
-					return;
-				}
-			}
-
-			// Shadow space
-			MSVC_ONLY(jit.sub(rsp, 40));
-
-			MSVC_ONLY(jit.mov(rcx, reinterpret_cast<std::uint64_t>(provider)));
-			GCC_ONLY(jit.mov(rdi, reinterpret_cast<std::uint64_t>(provider)));
-			
-			MSVC_ONLY(jit.mov(rdx, reinterpret_cast<std::uint64_t>(message)));
-			GCC_ONLY(jit.mov(rsi, reinterpret_cast<std::uint64_t>(message)));
-
-			jit.mov(rax, reinterpret_cast<std::uint64_t>(provider));
-			jit.mov(rax, rax(mfi.vtbloffs));
-			jit.mov(rax, rax(sizeof(void*) * mfi.vtblindex));
-			jit.call(rax);
-
-			MSVC_ONLY(jit.mov(rcx, reinterpret_cast<std::uint64_t>(provider)));
-			GCC_ONLY(jit.mov(rdi, reinterpret_cast<std::uint64_t>(provider)));
-			
-			MSVC_ONLY(jit.mov(rdx, reinterpret_cast<std::uint64_t>(message)));
-			GCC_ONLY(jit.mov(rsi, reinterpret_cast<std::uint64_t>(message)));
-
-			jit.mov(rax, reinterpret_cast<std::uint64_t>(provider));
-			jit.mov(rax, rax(mfi2.vtbloffs));
-			jit.mov(rax, rax(sizeof(void*) * mfi2.vtblindex));
-			jit.call(rax);
-
-			// Free shadow space
-			MSVC_ONLY(jit.add(rsp, 40));
-		}
-
 		x64GenContext::x64GenContext(const ProtoInfo *proto, int vtbl_offs, int vtbl_idx, ISourceHook *pSHPtr, CPageAlloc* allocator)
 			: m_GeneratedPubFunc(nullptr), m_OrigProto(proto), m_Proto(proto), m_VtblOffs(vtbl_offs),
 			  m_VtblIdx(vtbl_idx), m_SHPtr(pSHPtr), m_HookFunc(allocator), m_PubFunc(allocator), m_pHI(nullptr), m_HookfuncVfnptr(nullptr), m_HookFunc_FrameOffset(0), m_HookFunc_FrameVarsSize(0)
@@ -586,7 +519,7 @@ static_assert(false, "Missing parameters destruction for linux");
 			if (m_Proto.GetRet().size == 0) // void return function
 			{
 				// nullptr
-				m_HookFunc.xor(rax, rax);
+				m_HookFunc.xor_reg(rax, rax);
 				// 9th argument - const void* origRetPtr
 				MSVC_ONLY(m_HookFunc.mov(rsp(0x40), rax));
 				// 10th argument - void* overrideRetPtr
@@ -1102,7 +1035,7 @@ static_assert(false, "Missing registers saving for linux");
 			m_HookFunc.mov(rax, rax(getOrigRetPtrMfi.vtblindex * SIZE_PTR));
 			m_HookFunc.mov(r8, r8(getOverrideRetPtrMfi.vtblindex * SIZE_PTR));
 
-			m_HookFunc.xor(r9, r9);
+			m_HookFunc.xor_reg(r9, r9);
 			m_HookFunc.mov(r9, rbp(v_status));
 			m_HookFunc.cmp(r9, MRES_OVERRIDE);
 
@@ -1392,7 +1325,7 @@ static_assert(false, "Missing auto-detect type for linux!");
 			GCC_ONLY(m_PubFunc.pop(rbp));
 
 			// Return 0
-			m_PubFunc.xor(rax, rax);
+			m_PubFunc.xor_reg(rax, rax);
 
 			m_PubFunc.retn();
 

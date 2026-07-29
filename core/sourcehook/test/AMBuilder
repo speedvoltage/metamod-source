@@ -52,6 +52,9 @@ for cxx in MMS.all_targets:
     if binary.compiler.target.platform != 'linux':
       binary.sources += ['../sourcehook_hookmangen_x86_64.cpp']
     else:
-      binary.sources += ['testsysvabi.cpp']
+      binary.sources += [
+        'testsysvabi.cpp',
+        'testx64jit.cpp',
+      ]
 
   builder.Add(binary)

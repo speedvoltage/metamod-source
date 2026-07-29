@@ -57,6 +57,7 @@ DECL_TEST(HookManGen);
 DECL_TEST(OddThunks);
 #if defined(__linux__) && defined(__x86_64__)
 DECL_TEST(X64SysVAbiOracle);
+DECL_TEST(X64JitWriter);
 #endif
 
 int main(int argc, char *argv[])
@@ -87,6 +88,7 @@ int main(int argc, char *argv[])
 	DO_TEST(OddThunks);
 #if defined(__linux__) && defined(__x86_64__)
 	DO_TEST(X64SysVAbiOracle);
+	DO_TEST(X64JitWriter);
 #endif
 
 	cout << endl << "----" << endl << "Passed: " << passed << endl << "Failed: " << failed << endl;

@@ -53,7 +53,7 @@ extern "C" std::uint64_t SourceHookTestHookManX64InvokeMixed(
 extern "C" std::uint64_t SourceHookTestHookManX64InvokeScalar(
 	void *object,
 	std::uint64_t value);
-extern "C" std::uint64_t &SourceHookTestHookManX64InvokeReference(
+extern "C" std::uint64_t *SourceHookTestHookManX64InvokeReference(
 	void *object,
 	std::uint64_t selector);
 extern "C" std::uint64_t SourceHookTestHookManX64InvokeReentrant(
@@ -1452,7 +1452,7 @@ namespace
 
 			volatile std::uint64_t low = kCanaryLow;
 			volatile std::uint64_t high = kCanaryHigh;
-			std::uint64_t &result =
+			std::uint64_t *result =
 				SourceHookTestHookManX64InvokeReference(
 					&target,
 					UINT64_C(0x55));
@@ -1464,7 +1464,7 @@ namespace
 				originalsBefore + (modes[i] == MRES_SUPERCEDE ? 0 : 1);
 			valid =
 				valid &&
-				&result == expected &&
+				result == expected &&
 				state.originals == expectedOriginals &&
 				CallerCanaries(low, high);
 

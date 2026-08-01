@@ -457,6 +457,24 @@ namespace SourceHook
 				rm.write_modrm(this, reg);
 			}
 
+			void movups(x86_64_FloatReg reg, x86_64_RegRm rm) {
+				if (reg.extended() || rm.extended()) {
+					this->write_ubyte(rex(reg, rm));
+				}
+				this->write_ubyte(0x0F);
+				this->write_ubyte(0x10);
+				rm.write_modrm(this, reg);
+			}
+
+			void movups(x86_64_RegRm rm, x86_64_FloatReg reg) {
+				if (reg.extended() || rm.extended()) {
+					this->write_ubyte(rex(reg, rm));
+				}
+				this->write_ubyte(0x0F);
+				this->write_ubyte(0x11);
+				rm.write_modrm(this, reg);
+			}
+
 
 			void add(x86_64_Reg dst, x86_64_Reg src) {
 				this->write_ubyte(w_rex(src, dst));
